@@ -1,0 +1,28 @@
+{
+    "tasks": [
+        {
+            "label": "LightGunCfg",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                "-mwindows", // 禁用cmd窗口
+                // "-g",
+                "${workspaceRoot}/src/main.cpp",
+                "${workspaceRoot}/build/pistol.o",
+                "-o",
+                "${workspaceRoot}/build/LightGunCfg.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
+        }
+    ],
+    "version": "2.0.0"
+}
