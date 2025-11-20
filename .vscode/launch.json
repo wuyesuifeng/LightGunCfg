@@ -10,7 +10,27 @@
             "type": "cppdbg",
             "request": "launch",
             "cwd": "${workspaceRoot}/build",
-            "program": "${workspaceRoot}/build/LightGunCfg.exe"
+            "program": "${workspaceRoot}/build/LightGunCfg.exe",
+            "setupCommands": [
+                {
+                    "description": "Enable pretty-printing for gdb",
+                    "text": "-enable-pretty-printing",
+                    "ignoreFailures": true
+                },
+                {
+                    "description": "Set character set to UTF-8",
+                    "text": "set charset UTF-8",
+                    "ignoreFailures": true
+                }
+            ]
+        },
+        {
+            "name": "test",
+            "preLaunchTask": "test",
+            "type": "cppdbg",
+            "request": "launch",
+            "cwd": "${workspaceRoot}/build",
+            "program": "${workspaceRoot}/build/test.exe"
         }
     ]
 }

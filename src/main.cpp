@@ -1,29 +1,93 @@
 #include <windows.h>
 #include <tchar.h>
+#include <setupapi.h>
 #include <iostream>
+#include <string>
+#include <fstream>
+#include "nlohmann/json.hpp"
 
 using namespace std;
+using Json = nlohmann::json;
 
 // 托盘图标的ID
 #define ID_TRAY_ICON 1001
 #define WM_TRAY_MESSAGE (WM_APP + 1)
 
+#define PATH_DEVICES "devices.txt"
+#define PATH_SETTING "settings.ini"
+
+Json jsonData;
+
 void typeButton(LPARAM lParam) {
     static HRAWINPUT hRawInput;
     hRawInput = (HRAWINPUT)lParam;
-    static RAWINPUT input = {0};
-    static UINT size = sizeof(input);
-    GetRawInputData(hRawInput, RID_INPUT, &input, &size, sizeof(RAWINPUTHEADER));
-    if (input.data.mouse.usFlags) {
-        switch (input.data.mouse.usButtonFlags) {
-        case 16:
-            keybd_event(48 + input.data.mouse.usFlags, 0, 0, 0);
-            break;
-        case 32:
-            keybd_event(48 + input.data.mouse.usFlags, 0, KEYEVENTF_KEYUP, 0);
-            break;
-        }
+    static RAWINPUT *input;
+    input = (RAWINPUT *)malloc(sizeof(RAWINPUT));
+    static UINT size;
+    size = sizeof(*input);
+    GetRawInputData(hRawInput, RID_INPUT, input, &size, sizeof(RAWINPUTHEADER));
+
+    static DWORD type;
+    type = input->header.dwType;
+
+    if (type > 1) {
+        return;
     }
+
+    static RID_DEVICE_INFO info;
+    size = sizeof(RID_DEVICE_INFO);
+    static HANDLE hDevice;
+    hDevice = input->header.hDevice;
+
+    if (size = GetRawInputDeviceInfo(hDevice, RIDI_DEVICEINFO, &info, &size)) {
+        static unsigned int nameSize;
+        GetRawInputDeviceInfo(hDevice, RIDI_DEVICENAME, nullptr, &nameSize);
+        static char *name;
+        name = (char *)malloc(nameSize);
+        GetRawInputDeviceInfo(hDevice, RIDI_DEVICENAME, name, &nameSize);
+
+        static USHORT btn;
+        if (type) {
+            for (const auto &keyboard : jsonData["keyboard"]) {
+                if (name == keyboard["id"]) {
+                    if (input->data.keyboard.VKey) {
+                        // cout << "Flags: " << input->data.keyboard.Flags << endl;
+                        // cout << "VKey: " << input->data.keyboard.VKey << endl;
+                        btn = input->data.keyboard.VKey;
+                        for (const auto &handle : keyboard["handles"]) {
+                            if (btn == handle["btn"]) {
+                                keybd_event(handle["vk"], 0, 0, 0);
+                            }
+                        }
+                    }
+                    break;
+                }
+            }
+        } else {
+            for (const auto &mouse : jsonData["mouse"]) {
+
+                if (name == mouse["id"]) {
+                    // cout << "usButtonFlags: " << input->data.mouse.usButtonFlags << endl;
+                    // cout << "name: " << name << endl;
+                    btn = input->data.mouse.usButtonFlags;
+                    for (const auto &handle : mouse["handles"]) {
+                        if (btn == handle["btnDown"]) {
+                            keybd_event(handle["vk"], 0, 0, 0);
+                            break;
+                        } else if (btn == handle["btnUp"]) {
+                            keybd_event(handle["vk"], 0, KEYEVENTF_KEYUP, 0);
+                            break;
+                        }
+                    }
+                    break;
+                }
+            }
+        }
+
+        free(name);
+    }
+
+    free(input);
 }
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
@@ -72,7 +136,95 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) 
     return 0;
 }
 
+void printName(PRAWINPUTDEVICELIST &pRawInputDeviceList, int i, string &str) {
+    unsigned int nameSize;
+    GetRawInputDeviceInfo(pRawInputDeviceList[i].hDevice, RIDI_DEVICENAME, nullptr, &nameSize);
+    char *name = (char *)malloc(nameSize);
+    GetRawInputDeviceInfo(pRawInputDeviceList[i].hDevice, RIDI_DEVICENAME, name, &nameSize);
+    str.append("name: ");
+    str.append(name);
+    str.append("\n\n");
+    free(name);
+}
+
+void printDevices() {
+    UINT nDevices;
+    PRAWINPUTDEVICELIST pRawInputDeviceList = NULL;
+
+    GetRawInputDeviceList(NULL, &nDevices, sizeof(RAWINPUTDEVICELIST));
+    if (nDevices == 0) {
+        return;
+    }
+    if (pRawInputDeviceList = (PRAWINPUTDEVICELIST)malloc(sizeof(RAWINPUTDEVICELIST) * nDevices)) {
+        nDevices = GetRawInputDeviceList(pRawInputDeviceList, &nDevices, sizeof(RAWINPUTDEVICELIST));
+        RID_DEVICE_INFO info;
+        unsigned int size = sizeof(RID_DEVICE_INFO);
+        string str;
+        for (int i = 0; i < nDevices; i++) {
+            if (size = GetRawInputDeviceInfo(pRawInputDeviceList[i].hDevice, RIDI_DEVICEINFO, &info, &size)) {
+                switch (info.dwType) {
+                case RIM_TYPEMOUSE:
+                    str.append("type: 鼠标\n");
+                    printName(pRawInputDeviceList, i, str);
+                    break;
+                case RIM_TYPEKEYBOARD:
+                    str.append("type: 键盘\n");
+                    printName(pRawInputDeviceList, i, str);
+                }
+            }
+        }
+
+        ofstream ofs;
+        ofs.open(PATH_DEVICES, ios::out);
+        if (ofs.is_open()) {
+            ofs << str;
+            ofs.close();
+        }
+    }
+    free(pRawInputDeviceList);
+}
+
+std::string ReplaceAll(std::string str, const std::string &src, const std::string &dst) {
+    std::string::size_type pos(0);
+    int diff = dst.length() - src.length();
+    diff = diff > 0 ? diff + 1 : 1;
+    while ((pos = str.find(src, pos)) != std::string::npos) {
+        str.replace(pos, src.length(), dst);
+        pos += diff;
+    }
+    return str;
+}
+
 int main() {
+    ifstream ifs;
+    ifs.open(PATH_DEVICES, ios::in);
+
+    if (ifs.is_open()) {
+        ifs.close();
+
+        ifs.open(PATH_SETTING, ios::in);
+
+        if (ifs.is_open()) {
+            string buff, jsonStr;
+            while (getline(ifs, buff)) {
+                jsonStr.append(buff);
+            }
+            jsonStr = ReplaceAll(jsonStr, "\\", "\\\\");
+
+            jsonData = Json::parse(jsonStr);
+            // std::cout << "id:\n"
+            //           << (string)jsonData["keyboard"][0]["id"] << "\n\n";
+
+            ifs.close();
+
+            printDevices();
+        } else {
+            return -1;
+        }
+    } else {
+        printDevices();
+        return 1;
+    }
 
     WNDCLASSEX wcx = {0};
     wcx.cbSize = sizeof(WNDCLASSEX);
@@ -84,29 +236,34 @@ int main() {
 
     // 创建并初始化托盘图标数据结构
     NOTIFYICONDATA nid = {0};
-    nid.cbSize = sizeof(NOTIFYICONDATA);                          // 设置结构体大小
-    nid.hWnd = hWnd;                                              // 设置窗口句柄，托盘图标和该窗口相关联
-    nid.uID = ID_TRAY_ICON;                                       // 图标的唯一标识符
-    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;                // 设置托盘图标显示内容，包括图标、消息和提示文本
-    nid.uCallbackMessage = WM_TRAY_MESSAGE;                       // 设置回调消息，当用户与图标交互时，消息会发送到指定窗口
+    nid.cbSize = sizeof(NOTIFYICONDATA);                                      // 设置结构体大小
+    nid.hWnd = hWnd;                                                          // 设置窗口句柄，托盘图标和该窗口相关联
+    nid.uID = ID_TRAY_ICON;                                                   // 图标的唯一标识符
+    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;                            // 设置托盘图标显示内容，包括图标、消息和提示文本
+    nid.uCallbackMessage = WM_TRAY_MESSAGE;                                   // 设置回调消息，当用户与图标交互时，消息会发送到指定窗口
     nid.hIcon = ::ExtractIcon(GetModuleHandle(NULL), "./LightGunCfg.exe", 0); // 设置托盘图标
-    lstrcpyn(nid.szTip, _T("LightGunCfg"), ARRAYSIZE(nid.szTip)); // 设置图标的提示文本
+    lstrcpyn(nid.szTip, _T("LightGunCfg"), ARRAYSIZE(nid.szTip));             // 设置图标的提示文本
 
     // 将托盘图标添加到系统托盘
     Shell_NotifyIcon(NIM_ADD, &nid);
 
-    RAWINPUTDEVICE rid = {0};
-    rid.usUsagePage = 0x01;
-    rid.usUsage = 0x02; // keyboard
-    rid.dwFlags = RIDEV_INPUTSINK;
-    rid.hwndTarget = hWnd;
+    RAWINPUTDEVICE rid[2];
+    rid[0].usUsagePage = 0x01;
+    rid[0].usUsage = 0x06; // keyboard
+    rid[0].dwFlags = RIDEV_INPUTSINK;
+    rid[0].hwndTarget = hWnd;
 
-    RegisterRawInputDevices(&rid, 1, sizeof(RAWINPUTDEVICE));
+    rid[1].usUsagePage = 0x01;
+    rid[1].usUsage = 0x02; // mouse
+    rid[1].dwFlags = RIDEV_INPUTSINK;
+    rid[1].hwndTarget = hWnd;
 
-    MSG msg;
-    while (GetMessage(&msg, NULL, 0, 0)) {
-        TranslateMessage(&msg);
-        DispatchMessage(&msg);
+    if (RegisterRawInputDevices(rid, 2, sizeof(RAWINPUTDEVICE))) {
+        MSG msg;
+        while (GetMessage(&msg, NULL, 0, 0)) {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+        }
     }
 
     // 程序退出前，删除托盘图标

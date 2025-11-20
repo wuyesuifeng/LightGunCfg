@@ -22,6 +22,29 @@
             "problemMatcher": [
                 "$gcc"
             ]
+        },
+        {
+            "label": "test",
+            "type": "shell",
+            "command": "g++",
+            "args": [
+                // "-mwindows", // 禁用cmd窗口
+                "-g",
+                "${workspaceRoot}/src/test.cpp",
+                "-lsetupapi",
+                "-o",
+                "${workspaceRoot}/build/test.exe"
+            ],
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "group": {
+                "kind": "build",
+                "isDefault": false
+            },
+            "problemMatcher": [
+                "$gcc"
+            ]
         }
     ],
     "version": "2.0.0"
