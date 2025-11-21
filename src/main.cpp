@@ -5,6 +5,7 @@
 #include <string>
 #include <fstream>
 #include "nlohmann/json.hpp"
+#include "boot.hpp"
 
 using namespace std;
 using Json = nlohmann::json;
@@ -16,7 +17,27 @@ using Json = nlohmann::json;
 #define PATH_DEVICES "devices.txt"
 #define PATH_SETTING "settings.ini"
 
+string absolutePath;
 Json jsonData;
+string rootDir;
+
+string getAbsolutePath(const char *name) {
+    string result = rootDir;
+    absolutePath = result.append(name).c_str();
+    return absolutePath;
+}
+
+void Log(const char *str) {
+    ofstream ofs;
+    static const char *path = getAbsolutePath("debug.log").c_str();
+    ofs.open(path, ios::app);
+    while (!ofs.is_open()) {
+        Sleep(1000);
+        ofs.open(path, ios::app);
+    }
+    ofs << str << endl;
+    ofs.close();
+}
 
 void typeButton(LPARAM lParam) {
     static HRAWINPUT hRawInput;
@@ -70,6 +91,7 @@ void typeButton(LPARAM lParam) {
                     // cout << "usButtonFlags: " << input->data.mouse.usButtonFlags << endl;
                     // cout << "name: " << name << endl;
                     btn = input->data.mouse.usButtonFlags;
+
                     for (const auto &handle : mouse["handles"]) {
                         if (btn == handle["btnDown"]) {
                             keybd_event(handle["vk"], 0, 0, 0);
@@ -175,7 +197,7 @@ void printDevices() {
         }
 
         ofstream ofs;
-        ofs.open(PATH_DEVICES, ios::out);
+        ofs.open(getAbsolutePath(PATH_DEVICES).c_str(), ios::out);
         if (ofs.is_open()) {
             ofs << str;
             ofs.close();
@@ -196,15 +218,61 @@ std::string ReplaceAll(std::string str, const std::string &src, const std::strin
 }
 
 int main() {
-    ifstream ifs;
-    ifs.open(PATH_DEVICES, ios::in);
+    NOTIFYICONDATA nid = {0};
 
-    if (ifs.is_open()) {
-        ifs.close();
+    {
+        char namePath[MAX_PATH + 1] = {0};
+        GetModuleFileNameA(NULL, namePath, MAX_PATH);
+        rootDir.append(namePath);
+        rootDir = rootDir.substr(0, rootDir.find_last_of("\\") + 1);
 
-        ifs.open(PATH_SETTING, ios::in);
+        WNDCLASSEX wcx = {0};
+        wcx.cbSize = sizeof(WNDCLASSEX);
+        wcx.lpfnWndProc = WindowProc;
+        wcx.hInstance = GetModuleHandle(NULL);
+        wcx.lpszClassName = TEXT("LightGunCfg");
+        RegisterClassEx(&wcx);
+        HWND hWnd = CreateWindowEx(0, wcx.lpszClassName, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, GetModuleHandle(NULL), NULL);
 
-        if (ifs.is_open()) {
+        // 创建并初始化托盘图标数据结构
+        nid.cbSize = sizeof(NOTIFYICONDATA);                                      // 设置结构体大小
+        nid.hWnd = hWnd;                                                          // 设置窗口句柄，托盘图标和该窗口相关联
+        nid.uID = ID_TRAY_ICON;                                                   // 图标的唯一标识符
+        nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;                            // 设置托盘图标显示内容，包括图标、消息和提示文本
+        nid.uCallbackMessage = WM_TRAY_MESSAGE;                                   // 设置回调消息，当用户与图标交互时，消息会发送到指定窗口
+        nid.hIcon = ::ExtractIcon(GetModuleHandle(NULL), namePath, 0);            // 设置托盘图标
+        lstrcpyn(nid.szTip, _T("LightGunCfg"), ARRAYSIZE(nid.szTip));             // 设置图标的提示文本
+
+        // 将托盘图标添加到系统托盘
+        while (!Shell_NotifyIcon(NIM_ADD, &nid)) {
+            Sleep(1000);
+        }
+
+        RAWINPUTDEVICE rid[2];
+        rid[0].usUsagePage = 0x01;
+        rid[0].usUsage = 0x06; // keyboard
+        rid[0].dwFlags = RIDEV_INPUTSINK;
+        rid[0].hwndTarget = hWnd;
+
+        rid[1].usUsagePage = 0x01;
+        rid[1].usUsage = 0x02; // mouse
+        rid[1].dwFlags = RIDEV_INPUTSINK;
+        rid[1].hwndTarget = hWnd;
+
+        while (!RegisterRawInputDevices(rid, 2, sizeof(RAWINPUTDEVICE))) {
+            Sleep(1000);
+        }
+
+        ifstream ifs2(getAbsolutePath(PATH_SETTING).c_str());
+
+        if (ifs2.good()) {
+            ifstream ifs;
+            ifs.open(getAbsolutePath(PATH_SETTING).c_str(), ios::in);
+
+            while (!ifs.is_open()) {
+                Sleep(1000);
+                ifs.open(getAbsolutePath(PATH_SETTING).c_str(), ios::in);
+            }
             string buff, jsonStr;
             while (getline(ifs, buff)) {
                 jsonStr.append(buff);
@@ -215,59 +283,31 @@ int main() {
             // std::cout << "id:\n"
             //           << (string)jsonData["keyboard"][0]["id"] << "\n\n";
 
+            if (jsonData["autoBoot"]) {
+                Boot::AutoPowerOn();
+            } else {
+                Boot::CanclePowerOn();
+            }
+
             ifs.close();
 
             printDevices();
         } else {
-            return -1;
+            printDevices();
+            return 1;
         }
-    } else {
-        printDevices();
-        return 1;
     }
 
-    WNDCLASSEX wcx = {0};
-    wcx.cbSize = sizeof(WNDCLASSEX);
-    wcx.lpfnWndProc = WindowProc;
-    wcx.hInstance = GetModuleHandle(NULL);
-    wcx.lpszClassName = TEXT("RawInputClass");
-    RegisterClassEx(&wcx);
-    HWND hWnd = CreateWindowEx(0, TEXT("RawInputClass"), NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, GetModuleHandle(NULL), NULL);
-
-    // 创建并初始化托盘图标数据结构
-    NOTIFYICONDATA nid = {0};
-    nid.cbSize = sizeof(NOTIFYICONDATA);                                      // 设置结构体大小
-    nid.hWnd = hWnd;                                                          // 设置窗口句柄，托盘图标和该窗口相关联
-    nid.uID = ID_TRAY_ICON;                                                   // 图标的唯一标识符
-    nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;                            // 设置托盘图标显示内容，包括图标、消息和提示文本
-    nid.uCallbackMessage = WM_TRAY_MESSAGE;                                   // 设置回调消息，当用户与图标交互时，消息会发送到指定窗口
-    nid.hIcon = ::ExtractIcon(GetModuleHandle(NULL), "./LightGunCfg.exe", 0); // 设置托盘图标
-    lstrcpyn(nid.szTip, _T("LightGunCfg"), ARRAYSIZE(nid.szTip));             // 设置图标的提示文本
-
-    // 将托盘图标添加到系统托盘
-    Shell_NotifyIcon(NIM_ADD, &nid);
-
-    RAWINPUTDEVICE rid[2];
-    rid[0].usUsagePage = 0x01;
-    rid[0].usUsage = 0x06; // keyboard
-    rid[0].dwFlags = RIDEV_INPUTSINK;
-    rid[0].hwndTarget = hWnd;
-
-    rid[1].usUsagePage = 0x01;
-    rid[1].usUsage = 0x02; // mouse
-    rid[1].dwFlags = RIDEV_INPUTSINK;
-    rid[1].hwndTarget = hWnd;
-
-    if (RegisterRawInputDevices(rid, 2, sizeof(RAWINPUTDEVICE))) {
-        MSG msg;
-        while (GetMessage(&msg, NULL, 0, 0)) {
-            TranslateMessage(&msg);
-            DispatchMessage(&msg);
-        }
+    MSG msg;
+    while (GetMessage(&msg, NULL, 0, 0)) {
+        TranslateMessage(&msg);
+        DispatchMessage(&msg);
     }
 
     // 程序退出前，删除托盘图标
-    Shell_NotifyIcon(NIM_DELETE, &nid);
+    while (!Shell_NotifyIcon(NIM_DELETE, &nid)) {
+        Sleep(1000);
+    }
 
     return 0;
 }
