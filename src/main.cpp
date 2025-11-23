@@ -49,6 +49,17 @@ void Log(const char *str) {
     ofs.close();
 }
 
+std::string ReplaceAll(std::string str, const std::string &src, const std::string &dst) {
+    std::string::size_type pos(0);
+    int diff = dst.length() - src.length();
+    diff = diff > 0 ? diff + 1 : 1;
+    while ((pos = str.find(src, pos)) != std::string::npos) {
+        str.replace(pos, src.length(), dst);
+        pos += diff;
+    }
+    return str;
+}
+
 void typeButton(LPARAM lParam) {
     static HRAWINPUT hRawInput;
     hRawInput = (HRAWINPUT)lParam;
@@ -124,52 +135,6 @@ void typeButton(LPARAM lParam) {
     free(input);
 }
 
-LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
-    switch (uMsg) {
-    case WM_TRAY_MESSAGE:
-        // 如果收到的是右键点击事件
-        if (lParam == WM_RBUTTONUP) {
-            // 创建一个弹出菜单
-            HMENU hMenu = CreatePopupMenu();
-            AppendMenu(hMenu, MF_STRING, 1, _T("退出")); // 向菜单添加“退出”选项
-
-            // 获取鼠标当前位置
-            POINT pt;
-            GetCursorPos(&pt);
-
-            // 设置窗口为前景窗口（确保菜单显示在窗口前面）
-            SetForegroundWindow(hwnd);
-
-            // 显示菜单
-            TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hwnd, NULL);
-
-            // 菜单使用完毕后销毁
-            DestroyMenu(hMenu);
-        }
-        break;
-
-    case WM_COMMAND:
-        // 如果点击的是“退出”菜单项
-        if (wParam == 1) {
-            // 退出应用程序
-            PostQuitMessage(0);
-        }
-        break;
-
-    case WM_DESTROY:
-        // 销毁窗口时，退出应用程序
-        PostQuitMessage(0);
-        break;
-
-    case WM_INPUT:
-        typeButton(lParam);
-        break;
-    default:
-        return DefWindowProc(hwnd, uMsg, wParam, lParam); // 处理其他消息
-    }
-    return 0;
-}
-
 void printName(PRAWINPUTDEVICELIST &pRawInputDeviceList, int i, string &str) {
     unsigned int nameSize;
     GetRawInputDeviceInfo(pRawInputDeviceList[i].hDevice, RIDI_DEVICENAME, nullptr, &nameSize);
@@ -218,15 +183,91 @@ void printDevices() {
     free(pRawInputDeviceList);
 }
 
-std::string ReplaceAll(std::string str, const std::string &src, const std::string &dst) {
-    std::string::size_type pos(0);
-    int diff = dst.length() - src.length();
-    diff = diff > 0 ? diff + 1 : 1;
-    while ((pos = str.find(src, pos)) != std::string::npos) {
-        str.replace(pos, src.length(), dst);
-        pos += diff;
+void readCfg() {
+    ifstream ifs2(getAbsolutePath(PATH_SETTING).c_str());
+
+    if (ifs2.good()) {
+        ifstream ifs;
+        ifs.open(getAbsolutePath(PATH_SETTING).c_str(), ios::in);
+
+        while (!ifs.is_open()) {
+            Sleep(1000);
+            ifs.open(getAbsolutePath(PATH_SETTING).c_str(), ios::in);
+        }
+        string buff, jsonStr;
+        while (getline(ifs, buff)) {
+            jsonStr.append(buff);
+        }
+        jsonStr = ReplaceAll(jsonStr, "\\", "\\\\");
+
+        jsonData = Json::parse(jsonStr);
+        // std::cout << "id:\n"
+        //           << (string)jsonData["keyboard"][0]["id"] << "\n\n";
+
+        if (jsonData["startup"]) {
+            Boot::AutoPowerOn();
+        } else {
+            Boot::CanclePowerOn();
+        }
+
+        ifs.close();
+
+        printDevices();
+    } else {
+        printDevices();
     }
-    return str;
+}
+
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT uMsg, WPARAM wParam, LPARAM lParam) {
+    switch (uMsg) {
+    case WM_TRAY_MESSAGE:
+        // 如果收到的是右键点击事件
+        if (lParam == WM_RBUTTONUP) {
+            // 创建一个弹出菜单
+            HMENU hMenu = CreatePopupMenu();
+            AppendMenu(hMenu, MF_STRING, 2, _T("读取配置")); // 向菜单添加“退出”选项
+            AppendMenu(hMenu, MF_STRING, 1, _T("退出程序")); // 向菜单添加“退出”选项
+
+            // 获取鼠标当前位置
+            POINT pt;
+            GetCursorPos(&pt);
+
+            // 设置窗口为前景窗口（确保菜单显示在窗口前面）
+            SetForegroundWindow(hwnd);
+
+            // 显示菜单
+            TrackPopupMenu(hMenu, TPM_BOTTOMALIGN | TPM_LEFTALIGN, pt.x, pt.y, 0, hwnd, NULL);
+
+            // 菜单使用完毕后销毁
+            DestroyMenu(hMenu);
+        }
+        break;
+
+    case WM_COMMAND:
+        // 如果点击的是“退出”菜单项
+        switch (wParam) {
+        case 1:
+            // 退出应用程序
+            PostQuitMessage(0);
+            break;
+        case 2:
+            readCfg();
+            break;
+        }
+        break;
+
+    case WM_DESTROY:
+        // 销毁窗口时，退出应用程序
+        PostQuitMessage(0);
+        break;
+
+    case WM_INPUT:
+        typeButton(lParam);
+        break;
+    default:
+        return DefWindowProc(hwnd, uMsg, wParam, lParam); // 处理其他消息
+    }
+    return 0;
 }
 
 int main() {
@@ -275,39 +316,7 @@ int main() {
             Sleep(1000);
         }
 
-        ifstream ifs2(getAbsolutePath(PATH_SETTING).c_str());
-
-        if (ifs2.good()) {
-            ifstream ifs;
-            ifs.open(getAbsolutePath(PATH_SETTING).c_str(), ios::in);
-
-            while (!ifs.is_open()) {
-                Sleep(1000);
-                ifs.open(getAbsolutePath(PATH_SETTING).c_str(), ios::in);
-            }
-            string buff, jsonStr;
-            while (getline(ifs, buff)) {
-                jsonStr.append(buff);
-            }
-            jsonStr = ReplaceAll(jsonStr, "\\", "\\\\");
-
-            jsonData = Json::parse(jsonStr);
-            // std::cout << "id:\n"
-            //           << (string)jsonData["keyboard"][0]["id"] << "\n\n";
-
-            if (jsonData["startup"]) {
-                Boot::AutoPowerOn();
-            } else {
-                Boot::CanclePowerOn();
-            }
-
-            ifs.close();
-
-            printDevices();
-        } else {
-            printDevices();
-            return 1;
-        }
+        readCfg();
     }
 
     MSG msg;
