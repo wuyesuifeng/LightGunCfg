@@ -1,6 +1,3 @@
-type: 鼠标
-name: \\?\HID#VID_046D&PID_C07E&MI_00#a&2b669df7&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
-
 type: 键盘
 name: \\?\HID#VID_1A2C&PID_92F7&MI_01&Col05#a&5c05ae&0&0004#{884b96c3-56ef-11d1-bc8c-00a0c91405dd}
 
@@ -15,4 +12,7 @@ name: \\?\HID#VID_1A2C&PID_92F7&MI_01&Col04#a&5c05ae&0&0003#{884b96c3-56ef-11d1-
 
 type: 键盘
 name: \\?\HID#VID_1A2C&PID_92F7&MI_01&Col06#a&5c05ae&0&0005#{884b96c3-56ef-11d1-bc8c-00a0c91405dd}
+
+type: 鼠标
+name: \\?\HID#VID_046D&PID_C07E&MI_00#a&2b669df7&0&0000#{378de44c-56ef-11d1-bc8c-00a0c91405dd}
 

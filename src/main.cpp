@@ -5,7 +5,8 @@
 #include <string>
 #include <fstream>
 #include "nlohmann/json.hpp"
-#include "boot.hpp"
+#include "utils/boot.hpp"
+#include "utils/process.hpp"
 
 using namespace std;
 using Json = nlohmann::json;
@@ -16,6 +17,15 @@ using Json = nlohmann::json;
 
 #define PATH_DEVICES "devices.txt"
 #define PATH_SETTING "settings.ini"
+
+#define CHECK_EXCEPTION(jsonData)                                                                      \
+    {                                                                                                  \
+        for (const auto &exception : jsonData["exception"]) {                                          \
+            if (ProcessHelper::ifProcess(string(exception["process"]), string(exception["module"]))) { \
+                return;                                                                                \
+            }                                                                                          \
+        }                                                                                              \
+    }
 
 string absolutePath;
 Json jsonData;
@@ -77,6 +87,7 @@ void typeButton(LPARAM lParam) {
                         btn = input->data.keyboard.VKey;
                         for (const auto &handle : keyboard["handles"]) {
                             if (btn == handle["btn"]) {
+                                CHECK_EXCEPTION(jsonData);
                                 keybd_event(handle["vk"], 0, 0, 0);
                             }
                         }
@@ -91,8 +102,9 @@ void typeButton(LPARAM lParam) {
                     // cout << "usButtonFlags: " << input->data.mouse.usButtonFlags << endl;
                     // cout << "name: " << name << endl;
                     btn = input->data.mouse.usButtonFlags;
-
+                    string process, module;
                     for (const auto &handle : mouse["handles"]) {
+                        CHECK_EXCEPTION(jsonData);
                         if (btn == handle["btnDown"]) {
                             keybd_event(handle["vk"], 0, 0, 0);
                             break;
@@ -235,13 +247,13 @@ int main() {
         HWND hWnd = CreateWindowEx(0, wcx.lpszClassName, NULL, 0, 0, 0, 0, 0, HWND_MESSAGE, NULL, GetModuleHandle(NULL), NULL);
 
         // 创建并初始化托盘图标数据结构
-        nid.cbSize = sizeof(NOTIFYICONDATA);                                      // 设置结构体大小
-        nid.hWnd = hWnd;                                                          // 设置窗口句柄，托盘图标和该窗口相关联
-        nid.uID = ID_TRAY_ICON;                                                   // 图标的唯一标识符
-        nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;                            // 设置托盘图标显示内容，包括图标、消息和提示文本
-        nid.uCallbackMessage = WM_TRAY_MESSAGE;                                   // 设置回调消息，当用户与图标交互时，消息会发送到指定窗口
-        nid.hIcon = ::ExtractIcon(GetModuleHandle(NULL), namePath, 0);            // 设置托盘图标
-        lstrcpyn(nid.szTip, _T("LightGunCfg"), ARRAYSIZE(nid.szTip));             // 设置图标的提示文本
+        nid.cbSize = sizeof(NOTIFYICONDATA);                           // 设置结构体大小
+        nid.hWnd = hWnd;                                               // 设置窗口句柄，托盘图标和该窗口相关联
+        nid.uID = ID_TRAY_ICON;                                        // 图标的唯一标识符
+        nid.uFlags = NIF_ICON | NIF_MESSAGE | NIF_TIP;                 // 设置托盘图标显示内容，包括图标、消息和提示文本
+        nid.uCallbackMessage = WM_TRAY_MESSAGE;                        // 设置回调消息，当用户与图标交互时，消息会发送到指定窗口
+        nid.hIcon = ::ExtractIcon(GetModuleHandle(NULL), namePath, 0); // 设置托盘图标
+        lstrcpyn(nid.szTip, _T("LightGunCfg"), ARRAYSIZE(nid.szTip));  // 设置图标的提示文本
 
         // 将托盘图标添加到系统托盘
         while (!Shell_NotifyIcon(NIM_ADD, &nid)) {
@@ -283,7 +295,7 @@ int main() {
             // std::cout << "id:\n"
             //           << (string)jsonData["keyboard"][0]["id"] << "\n\n";
 
-            if (jsonData["autoBoot"]) {
+            if (jsonData["startup"]) {
                 Boot::AutoPowerOn();
             } else {
                 Boot::CanclePowerOn();
