@@ -1,30 +1,54 @@
-#include <string>
 #include <iostream>
+#include <string>
+#include <fstream>
+#include <vector>
+#include "nlohmann/json.hpp"
 
 using namespace std;
+using Json = nlohmann::json;
 
-int findLastOfIgnoreCase(string str, string dst) {
-    static int i, j, dstLen;
-    static char dstLast;
-    dstLen = dst.length() - 1;
-    dstLast = toupper(dst.at(dstLen));
-    for (i = str.length() - 1; i >= dstLen; i--) {
-        if (toupper(str.at(i)) == dstLast) {
-            for (j = 1; j < dstLen; j++) {
-                if (toupper(str.at(i - j)) != toupper(dst.at(dstLen - j))) {
-                    goto for1;
-                }
-            }
-            return i + 1;
-        }
-    for1:
-        continue;
+std::string ReplaceAll(std::string str, const std::string &src, const std::string &dst) {
+    std::string::size_type pos(0);
+    int diff = dst.length() - src.length();
+    diff = diff > 0 ? diff + 1 : 1;
+    while ((pos = str.find(src, pos)) != std::string::npos) {
+        str.replace(pos, src.length(), dst);
+        pos += diff;
     }
-    return -1;
+    return str;
 }
 
 int main() {
-    string str("L:\\ISO\\TeknoParrot\\LaunchBox\\LazyLauncher\\Items\\ringwide_og_cn\\gs2.exe");
-    int res = findLastOf(str, "\\Ringwide_Og_cn\\gS2.exe");
-    cout << "res: " << (res == str.length()) << endl;
+    ifstream ifs2("settings.ini");
+
+    if (ifs2.good()) {
+        ifstream ifs;
+        ifs.open("settings.ini", ios::in);
+
+        string buff, jsonStr;
+        while (getline(ifs, buff)) {
+            jsonStr.append(buff);
+        }
+
+        ifs.close();
+
+        jsonStr = ReplaceAll(jsonStr, "\\", "\\\\");
+
+        Json jsonData = Json::parse(jsonStr);
+
+        for (Json &mouse : jsonData["mouse"]) {
+            for (Json &handle : mouse["handles"]) {
+                if (handle["duration"] > 0) {
+                    vector<unsigned long long> v;
+                    for (int i = 0; i < handle["btnDown"].size(); i++) {
+                        v.push_back(0);
+                    }
+                    handle["dTime"] = Json(v);
+                    handle["uTime"] = Json(v);
+                }
+            }
+        }
+
+        cout << jsonData.dump() << endl;
+    }
 }
