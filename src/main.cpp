@@ -156,8 +156,11 @@ void typeButton(LPARAM lParam) {
                         CHECK_EXCEPTION(handle);
 
                         if (handle[JSON_KEY_SINGLE]) {
-                            if (btn == handle[JSON_KEY_BTNUP]) {
+                            if (btn == handle[JSON_KEY_BTNDOWN]) {
                                 keybd_event(handle[JSON_KEY_VK], 0, 0, 0);
+                                break;
+                            } else if (btn == handle[JSON_KEY_BTNUP]) {
+                                keybd_event(handle[JSON_KEY_VK], 0, KEYEVENTF_KEYUP, 0);
                                 break;
                             }
                         } else {
