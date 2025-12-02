@@ -93,6 +93,8 @@ void longPress(Json *handle, const int handleIndex, const int activedLen, const 
     } while (now - timestamp < duration);
     // cout << "vk: " << (*handle)[JSON_KEY_VK] << endl;
     keybd_event((*handle)[JSON_KEY_VK], 0, 0, 0);
+    Sleep(500);
+    keybd_event((*handle)[JSON_KEY_VK], 0, KEYEVENTF_KEYUP, 0);
 }
 
 void typeButton(LPARAM lParam) {
