@@ -127,6 +127,7 @@ void typeButton(LPARAM lParam) {
 
         static USHORT btn;
         if (type) {
+            // cout << "keyboard name: " << name << endl;
             for (const auto &keyboard : jsonData[JSON_KEY_KEYBOARD]) {
                 if (name == keyboard[JSON_KEY_ID]) {
                     if (input->data.keyboard.VKey) {
@@ -136,7 +137,11 @@ void typeButton(LPARAM lParam) {
                         for (const auto &handle : keyboard[JSON_KEY_HANDLES]) {
                             if (btn == handle[JSON_KEY_BTN]) {
                                 CHECK_EXCEPTION(handle);
-                                keybd_event(handle[JSON_KEY_VK], 0, 0, 0);
+                                if (input->data.keyboard.Flags) {
+                                    keybd_event(handle[JSON_KEY_VK], 0, KEYEVENTF_KEYUP, 0);
+                                } else {
+                                    keybd_event(handle[JSON_KEY_VK], 0, 0, 0);
+                                }
                             }
                         }
                     }
@@ -318,6 +323,13 @@ void readCfg() {
             }
         }
 
+        for (Json &keyboard : jsonData[JSON_KEY_KEYBOARD]) {
+            for (Json &handle : keyboard[JSON_KEY_HANDLES]) {
+                if (!handle.contains(JSON_KEY_EXCEPTION)) {
+                    handle[JSON_KEY_EXCEPTION] = {};
+                }
+            }
+        }
         // cout << jsonData.dump() << endl;
 
         if (jsonData[JSON_KEY_STARTUP]) {
